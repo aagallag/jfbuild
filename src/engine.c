@@ -11527,6 +11527,8 @@ void setpolymost2dview(void)
 
 void buildprintf(const char *fmt, ...)
 {
+#if LOG_FILE_DISABLED
+#else
 	char tmpstr[1024];
 	va_list va, vac;
 
@@ -11551,22 +11553,29 @@ void buildprintf(const char *fmt, ...)
 	OSD_Puts(tmpstr);
 
 	va_end(va);
+#endif //LOG_FILE_DISABLED
 }
 
 void buildputs(const char *str)
 {
+#if LOG_FILE_DISABLED
+#else
     fputs(str, stdout);
     if (logfile) fputs(str, logfile);
     initputs(str);  // the startup window
     OSD_Puts(str);  // the onscreen-display
+#endif //LOG_FILE_DISABLED
 }
 
 void buildsetlogfile(const char *fn)
 {
+#if LOG_FILE_DISABLED
+#else
 	if (logfile) Bfclose(logfile);
 	logfile = NULL;
 	if (fn) logfile = Bfopen(fn,"w");
 	if (logfile) setvbuf(logfile, (char*)NULL, _IONBF, 0);
+#endif //LOG_FILE_DISABLED
 }
 
 

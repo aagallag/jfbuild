@@ -1,0 +1,201 @@
+#---------------------------------------------------------------------------------
+.SUFFIXES:
+#---------------------------------------------------------------------------------
+
+ifeq ($(strip $(DEVKITPRO)),)
+$(error "Please set DEVKITPRO in your environment. export DEVKITPRO=<path to>/devkitpro")
+endif
+
+include $(DEVKITPRO)/libnx/switch_rules
+
+#---------------------------------------------------------------------------------
+# TARGET is the name of the output
+# SOURCES is a list of directories containing source code
+# DATA is a list of directories containing data files
+# INCLUDES is a list of directories containing header files
+#---------------------------------------------------------------------------------
+TARGET		:=	$(notdir $(CURDIR))
+CPP_SRCS	:=	src/rg_etc1.cpp \
+				src/polymosttexcompress.cpp \
+				libsquish/alpha.cpp \
+				libsquish/clusterfit.cpp \
+				libsquish/colourblock.cpp \
+				libsquish/colourfit.cpp \
+				libsquish/colourset.cpp \
+				libsquish/maths.cpp \
+				libsquish/rangefit.cpp \
+				libsquish/singlecolourfit.cpp \
+				libsquish/squish.cpp
+C_SRCS		:=	src/a-c.c \
+				src/pragmas.c \
+				src/asmprot.c \
+				src/hightile.c \
+				src/scriptfile.c \
+				src/baselayer.c \
+				src/kplib.c \
+				src/sdlayer2.c \
+				src/cache1d.c \
+				src/mdsprite.c \
+				src/smalltextfont.c \
+				src/compat.c \
+				src/config.c \
+				src/mmulti_null.c \
+				src/crc32.c \
+				src/osd.c \
+				src/textfont.c \
+				src/defs.c \
+				src/polymost.c \
+				src/version.c \
+				src/engine.c \
+				src/polymosttex.c \
+				src/glbuild.c \
+				src/polymosttexcache.c
+SOURCES		:=	src libsquish
+DATA		:=	data
+INCLUDES	:=	include libsquish src
+
+SDLCONFIG_CFLAGS=$(shell $(SDL2CONFIG) --cflags)
+SDLCONFIG_LIBS=$(shell $(SDL2CONFIG) --libs)
+
+#---------------------------------------------------------------------------------
+# options for code generation
+#---------------------------------------------------------------------------------
+ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIC -ftls-model=local-exec
+
+CFLAGS	:=	-g -Wall -Werror \
+			-ffunction-sections \
+			-fdata-sections \
+			$(ARCH) \
+			$(BUILD_CFLAGS)
+
+CFLAGS	+=	$(INCLUDE) -D__SWITCH__ -DRENDERTYPESDL=1 -DUSE_OPENGL=12 -DUSE_POLYMOST=1 -DLOG_FILE_DISABLED=1 \
+			-Wno-misleading-indentation -Wno-unused-value -Wno-unknown-pragmas -Wno-maybe-uninitialized -Wno-unused-variable\
+			-Wno-unused-but-set-variable -Wno-format-truncation -Wno-format-overflow -Wno-strict-aliasing \
+			-Wno-parentheses -Wno-stringop-truncation -Wno-unused-function
+
+CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions \
+			-Wno-class-memaccess
+
+CFLAGS	+=	-Wno-incompatible-pointer-types
+
+ASFLAGS	:=	-g $(ARCH)
+
+#---------------------------------------------------------------------------------
+# list of directories containing libraries, this must be the top level containing
+# include and lib
+#---------------------------------------------------------------------------------
+LIBDIRS := $(PORTLIBS) $(LIBNX)
+
+#---------------------------------------------------------------------------------
+# no real need to edit anything past this point unless you need to add additional
+# rules for different file extensions
+#---------------------------------------------------------------------------------
+ifneq ($(BUILD),$(notdir $(CURDIR)))
+#---------------------------------------------------------------------------------
+
+export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
+			$(foreach dir,$(DATA),$(CURDIR)/$(dir))
+
+CFILES		:=	$(foreach dir,$(C_SRCS),$(notdir $(dir)))
+CPPFILES	:=	$(foreach dir,$(CPP_SRCS),$(notdir $(dir)))
+SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
+BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
+GLSLFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.glsl)))
+CFILES		+=	$(GLSLFILES:.glsl=.c)
+#CPPFILES	:=	$(CPPFILES:.cc=.cpp)
+
+#---------------------------------------------------------------------------------
+# use CXX for linking C++ projects, CC for standard C
+#---------------------------------------------------------------------------------
+ifeq ($(strip $(CPPFILES)),)
+#---------------------------------------------------------------------------------
+	export LD	:=	$(CC)
+#---------------------------------------------------------------------------------
+else
+#---------------------------------------------------------------------------------
+	export LD	:=	$(CXX)
+#---------------------------------------------------------------------------------
+endif
+#---------------------------------------------------------------------------------
+
+export OFILES_BIN	:=	$(addsuffix .o,$(BINFILES))
+export OFILES_SRC	:=	$(CFILES:.c=.o) $(CPPFILES:.cpp=.o) $(SFILES:.s=.o)
+export OFILES 	:=	$(OFILES_BIN) $(OFILES_SRC)
+export HFILES	:=	$(addsuffix .h,$(subst .,_,$(BINFILES)))
+
+export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
+			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+			-I$(CURDIR)/$(BUILD)
+
+.PHONY: clean all
+
+#---------------------------------------------------------------------------------
+all: lib/lib$(TARGET).a lib/lib$(TARGET)d.a
+
+lib:
+	@[ -d $@ ] || mkdir -p $@
+
+release:
+	@[ -d $@ ] || mkdir -p $@
+
+debug:
+	@[ -d $@ ] || mkdir -p $@
+
+lib/lib$(TARGET).a : lib release $(SOURCES) $(INCLUDES)
+	@$(MAKE) BUILD=release OUTPUT=$(CURDIR)/$@ \
+	BUILD_CFLAGS="-DNDEBUG=1 -O2" \
+	DEPSDIR=$(CURDIR)/release \
+	--no-print-directory -C release \
+	-f $(CURDIR)/Makefile.switch
+
+lib/lib$(TARGET)d.a : lib debug $(SOURCES) $(INCLUDES)
+	@$(MAKE) BUILD=debug OUTPUT=$(CURDIR)/$@ \
+	BUILD_CFLAGS="-DDEBUG=1 -Og" \
+	DEPSDIR=$(CURDIR)/debug \
+	--no-print-directory -C debug \
+	-f $(CURDIR)/Makefile.switch
+
+dist-bin: all
+	@tar --exclude=*~ -cjf lib$(TARGET).tar.bz2 include lib
+
+dist-src:
+	@tar --exclude=*~ -cjf lib$(TARGET)-src.tar.bz2 include source Makefile
+
+dist: dist-src dist-bin
+
+#---------------------------------------------------------------------------------
+clean:
+	@echo clean ...
+	@rm -fr release debug lib *.bz2 src/polymost_*.c src/polymostaux_*.c src/polymosttexcompress.cpp
+
+#---------------------------------------------------------------------------------
+else
+
+DEPENDS	:=	$(OFILES:.o=.d)
+
+#---------------------------------------------------------------------------------
+# main targets
+#---------------------------------------------------------------------------------
+$(OUTPUT)	:	$(OFILES)
+
+# Special rule for polymosttexcompress
+%.cpp: %.cc
+	cp $< $@
+# Generate glsl c files
+%.c: %.glsl
+	perl $(CURDIR)/../tools/text2c.pl $< default_$(notdir $*)_glsl > $@
+
+$(OFILES_SRC)	: $(HFILES)
+
+#---------------------------------------------------------------------------------
+%_bin.h %.bin.o	:	%.bin
+#---------------------------------------------------------------------------------
+	@echo $(notdir $<)
+	@$(bin2o)
+
+
+-include $(DEPENDS)
+
+#---------------------------------------------------------------------------------------
+endif
+#---------------------------------------------------------------------------------------

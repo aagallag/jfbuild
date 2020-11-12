@@ -22,7 +22,7 @@
 # define _GNU_SOURCE 1
 #endif
 
-#if defined __APPLE__
+#if defined __APPLE__ || defined __SWITCH__
 # include <SDL2/SDL.h>
 #else
 # include "SDL.h"
@@ -120,7 +120,8 @@ static int buildkeytranslationtable(void);
 
 static void shutdownvideo(void);
 
-#ifndef __APPLE__
+#if defined(__APPLE__) || defined(__SWITCH__)
+#else
 static SDL_Surface * loadappicon(void);
 #endif
 
@@ -240,6 +241,8 @@ int wm_idle(void *ptr)
 {
 #if defined HAVE_GTK
     return wmgtk_idle(ptr);
+#else
+    return -1;
 #endif
 }
 
@@ -312,8 +315,10 @@ int main(int argc, char *argv[])
 	startwin_open();
 	baselayer_init();
 
+#ifndef __SWITCH__
 	// This avoids doubled character input in the (OSX) startup window's edit fields.
 	SDL_EventState(SDL_TEXTINPUT, SDL_IGNORE);
+#endif
 
 	r = app_main(_buildargc, (char const * const*)_buildargv);
 
@@ -1016,7 +1021,8 @@ int setvideomode(int x, int y, int c, int fs)
 		break;
 	} while (1);
 
-#ifndef __APPLE__
+#if defined(__APPLE__) || defined(__SWITCH__)
+#else
 	{
 		SDL_Surface *icon = loadappicon();
 		SDL_SetWindowIcon(sdl_window, icon);
@@ -1147,8 +1153,10 @@ int setvideomode(int x, int y, int c, int fs)
 
 	startwin_close();
 
+#ifndef __SWITCH__
 	// Start listening for character input.
 	SDL_EventState(SDL_TEXTINPUT, SDL_ENABLE);
+#endif
 
 	return 0;
 }
@@ -1331,7 +1339,8 @@ void *getglprocaddress(const char *name, int UNUSED(ext))
 #endif
 
 
-#ifndef __APPLE__
+#if defined(__APPLE__) || defined(__SWITCH__)
+#else
 extern struct sdlappicon sdlappicon;
 static SDL_Surface * loadappicon(void)
 {
@@ -1516,6 +1525,19 @@ int handleevents(void)
 			case SDL_CONTROLLERBUTTONDOWN:
 			case SDL_CONTROLLERBUTTONUP:
 				if (appactive) {
+// Swap buttons A and B on switch
+// And also swap X and Y on switch
+#ifdef __SWITCH__
+					if (ev.cbutton.button == SDL_CONTROLLER_BUTTON_A)
+						ev.cbutton.button = SDL_CONTROLLER_BUTTON_B;
+					else if (ev.cbutton.button == SDL_CONTROLLER_BUTTON_B)
+						ev.cbutton.button = SDL_CONTROLLER_BUTTON_A;
+					else if (ev.cbutton.button == SDL_CONTROLLER_BUTTON_X)
+						ev.cbutton.button = SDL_CONTROLLER_BUTTON_Y;
+					else if (ev.cbutton.button == SDL_CONTROLLER_BUTTON_Y)
+						ev.cbutton.button = SDL_CONTROLLER_BUTTON_X;
+#endif
+
 					if (ev.cbutton.state == SDL_PRESSED)
 						joyb |= 1 << ev.cbutton.button;
 					else

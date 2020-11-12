@@ -30,3 +30,8 @@
 /wad2map
 /generatesdlappicon
 /bin2c
+
+# Switch ignores
+debug/
+release/
+src/polymosttexcompress.cpp

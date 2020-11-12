@@ -137,6 +137,11 @@
 # define B_LITTLE_ENDIAN 1
 # define B_BIG_ENDIAN    0
 # define B_ENDIAN_C_INLINE 1
+
+#elif defined(__SWITCH__)
+# define B_LITTLE_ENDIAN 1
+# define B_BIG_ENDIAN    0
+# define B_ENDIAN_C_INLINE 1
 #endif
 
 #if !defined(B_LITTLE_ENDIAN) || !defined(B_BIG_ENDIAN)
